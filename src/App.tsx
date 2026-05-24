@@ -5,25 +5,28 @@ type Problem = {
   total: number
   groups: number
   answer: number
+  item: string
   story: string
+  hint: string
 }
 
 const problems: Problem[] = [
-  { total: 12, groups: 3, answer: 4, story: '반짝 조개 12개를 탐험대 3팀에게 똑같이 나눠 주세요.' },
-  { total: 15, groups: 5, answer: 3, story: '보물 열쇠 15개를 배 5척에 똑같이 실어 주세요.' },
-  { total: 18, groups: 6, answer: 3, story: '별사탕 18개를 친구 6명에게 똑같이 나눠 주세요.' },
-  { total: 20, groups: 4, answer: 5, story: '진주 20개를 상자 4개에 똑같이 담아 주세요.' },
-  { total: 24, groups: 6, answer: 4, story: '황금 동전 24개를 지도 6칸에 똑같이 올려 주세요.' },
-  { total: 28, groups: 7, answer: 4, story: '마법 구슬 28개를 등대 7곳에 똑같이 보내 주세요.' },
+  { total: 12, groups: 3, answer: 4, item: '빛조개', story: '빛조개 12개를 탐험대 3팀에게 똑같이 나눠 주세요.', hint: '전체 12개를 3묶음으로 나누면 한 묶음은 4개예요.' },
+  { total: 15, groups: 5, answer: 3, item: '열쇠', story: '보물 열쇠 15개를 배 5척에 똑같이 실어 주세요.', hint: '15개를 5묶음으로 나누면 한 묶음에 3개씩 들어가요.' },
+  { total: 18, groups: 6, answer: 3, item: '별사탕', story: '별사탕 18개를 친구 6명에게 똑같이 나눠 주세요.', hint: '6명이 같은 수를 받으려면 한 명에게 3개씩이에요.' },
+  { total: 20, groups: 4, answer: 5, item: '진주', story: '진주 20개를 상자 4개에 똑같이 담아 주세요.', hint: '20을 4번 똑같이 덜어내면 5씩 남아요.' },
+  { total: 24, groups: 6, answer: 4, item: '동전', story: '황금 동전 24개를 지도 6칸에 똑같이 올려 주세요.', hint: '24개를 6묶음으로 나누면 각 묶음은 4개예요.' },
+  { total: 28, groups: 7, answer: 4, item: '구슬', story: '마법 구슬 28개를 등대 7곳에 똑같이 보내 주세요.', hint: '28을 7묶음으로 나누면 한 곳에 4개씩 가요.' },
 ]
-
-const quizOptions = (answer: number) => {
-  const candidates = [answer, Math.max(1, answer - 1), answer + 1]
-  return candidates.sort((a, b) => ((a * 17 + b * 7) % 3) - 1)
-}
 
 function makeEmptyGroups(count: number) {
   return Array.from({ length: count }, () => 0)
+}
+
+function quizOptions(answer: number, seed: number) {
+  const set = new Set([answer, Math.max(1, answer - 1), answer + 1])
+  while (set.size < 3) set.add(answer + set.size)
+  return [...set].sort((a, b) => ((a * 13 + seed * 7) % 5) - ((b * 13 + seed * 7) % 5))
 }
 
 function App() {
@@ -33,156 +36,217 @@ function App() {
   const [score, setScore] = useState(0)
   const [streak, setStreak] = useState(0)
   const [quizDone, setQuizDone] = useState(false)
-  const [message, setMessage] = useState('보석을 한 개씩 눌러 팀에 나눠 주세요!')
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
+  const [checked, setChecked] = useState(false)
+  const [message, setMessage] = useState('반짝이는 보물을 한 팀씩 공평하게 나눠 보세요.')
 
   const problem = problems[problemIndex]
   const placed = groups.reduce((sum, value) => sum + value, 0)
   const remaining = problem.total - placed
+  const progress = Math.round((placed / problem.total) * 100)
   const isEven = remaining === 0 && groups.every((value) => value === problem.answer)
   const hasOverflow = groups.some((value) => value > problem.answer)
-  const options = useMemo(() => quizOptions(problem.answer), [problem.answer])
+  const options = useMemo(() => quizOptions(problem.answer, problemIndex), [problem.answer, problemIndex])
 
-  const resetForProblem = (nextIndex: number) => {
-    const next = problems[nextIndex]
-    setProblemIndex(nextIndex)
-    setGroups(makeEmptyGroups(next.groups))
-    setSelectedGroup(0)
-    setQuizDone(false)
-    setMessage('새 미션 시작! 보석을 똑같이 나눠 보세요.')
+  const updateGroup = (index: number, delta: number) => {
+    setGroups((current) => current.map((value, groupIndex) => groupIndex === index ? Math.max(0, value + delta) : value))
   }
 
-  const addGem = () => {
+  const addGem = (index = selectedGroup) => {
     if (remaining <= 0) {
-      setMessage('모든 보석을 놓았어요. 팀마다 같은지 확인해 볼까요?')
+      setMessage('모든 보물이 놓였어요. 공평한지 확인해 볼까요?')
       return
     }
-
-    setGroups((current) => current.map((value, index) => (index === selectedGroup ? value + 1 : value)))
-    const nextValue = groups[selectedGroup] + 1
-    if (nextValue > problem.answer) {
-      setMessage('앗, 이 팀이 조금 많아요. 되돌리기 버튼으로 맞춰 봐요.')
-    } else {
-      setMessage('좋아요! 다른 팀도 같은 수가 되도록 나눠 주세요.')
-    }
+    updateGroup(index, 1)
+    setSelectedGroup(index)
+    setChecked(false)
+    const nextValue = groups[index] + 1
+    if (nextValue > problem.answer) setMessage('이 팀은 목표보다 많아요. 하나 되돌려 균형을 맞춰 보세요.')
+    else if (remaining === 1) setMessage('마지막 보물까지 놓았어요. 이제 확인해 보세요!')
+    else setMessage(`${index + 1}팀에 1개 전달! 모든 팀이 같은 수가 되게 이어가요.`)
   }
 
-  const removeGem = (index: number) => {
-    setGroups((current) => current.map((value, groupIndex) => (groupIndex === index ? Math.max(0, value - 1) : value)))
-    setMessage('괜찮아요. 하나씩 조절하면 정확히 나눌 수 있어요.')
+  const removeGem = (index = selectedGroup) => {
+    updateGroup(index, -1)
+    setChecked(false)
+    setMessage('좋아요. 되돌리며 다시 균형을 맞출 수 있어요.')
   }
 
   const check = () => {
+    const wasChecked = checked
+    setChecked(true)
     if (isEven) {
-      setMessage(`정답! ${problem.total} ÷ ${problem.groups} = ${problem.answer}. 각 팀이 ${problem.answer}개씩 받았어요.`)
-      setScore((value) => value + 10)
-      setStreak((value) => value + 1)
+      setMessage(`완벽해요! ${problem.total} ÷ ${problem.groups} = ${problem.answer}. 각 팀이 ${problem.answer}개씩 받았어요.`)
+      if (!wasChecked) {
+        setScore((value) => value + 120 + streak * 20)
+        setStreak((value) => value + 1)
+      }
     } else if (hasOverflow) {
-      setMessage('어떤 팀은 너무 많아요. 모두 같은 수가 되도록 다시 맞춰 봐요.')
+      setMessage('한 팀이 조금 많이 받았어요. 팀별 개수를 비교해 보세요.')
       setStreak(0)
+    } else if (remaining > 0) {
+      setMessage(`아직 ${remaining}개가 남았어요. 남은 보물도 공평하게 나눠 주세요.`)
     } else {
-      setMessage('아직 똑같이 나누는 중이에요. 남은 보석을 계속 놓아 주세요.')
+      setMessage('모두 놓았지만 팀마다 개수가 달라요. 한 팀씩 개수를 맞춰 보세요.')
+      setStreak(0)
     }
   }
 
   const answerQuiz = (choice: number) => {
+    setSelectedAnswer(choice)
     if (choice === problem.answer) {
       setQuizDone(true)
-      setMessage('퀴즈까지 성공! 다음 섬으로 떠날 준비 완료!')
-      setScore((value) => value + 5)
+      setMessage('개념 확인까지 성공! 다음 섬으로 이동할 수 있어요.')
+      setScore((value) => value + 80)
     } else {
-      setMessage('거의 다 왔어요. 팀 하나가 받은 보석 수를 다시 떠올려 봐요.')
+      setMessage('정답은 한 팀이 받은 보물 수예요. 팀 카드의 개수를 다시 확인해 보세요.')
     }
   }
 
-  const nextProblem = () => resetForProblem((problemIndex + 1) % problems.length)
+  const nextProblem = () => {
+    const next = (problemIndex + 1) % problems.length
+    setProblemIndex(next)
+    setGroups(makeEmptyGroups(problems[next].groups))
+    setSelectedGroup(0)
+    setQuizDone(false)
+    setSelectedAnswer(null)
+    setChecked(false)
+    setMessage('새로운 섬에 도착했어요. 이번에도 공평하게 나눠 봐요!')
+  }
 
   return (
-    <main className="game-shell">
-      <div className="scene-bg" />
-      <section className="hero-panel">
-        <div className="title-block">
-          <p className="eyebrow">초등 나눗셈 게임</p>
-          <h1>나눗셈 보물섬</h1>
-          <p className="mission">{problem.story}</p>
+    <main className="app-shell">
+      <div className="background-layer" />
+      <div className="ambient ambient-one" />
+      <div className="ambient ambient-two" />
+
+      <nav className="top-nav" aria-label="게임 상태">
+        <div className="brand-lockup">
+          <span className="brand-mark">÷</span>
+          <div>
+            <strong>Division Island</strong>
+            <small>초등 나눗셈 미션</small>
+          </div>
         </div>
-        <div className="score-board" aria-label="점수판">
-          <span>점수 <b>{score}</b></span>
-          <span>연속 성공 <b>{streak}</b></span>
+        <div className="nav-stats">
+          <span>점수 <b>{score.toLocaleString()}</b></span>
+          <span>연속 <b>{streak}</b></span>
+          <span>미션 <b>{problemIndex + 1}/{problems.length}</b></span>
+        </div>
+      </nav>
+
+      <section className="hero-section">
+        <div className="hero-copy">
+          <span className="product-badge">Premium Math Quest</span>
+          <h1>나눗셈 보물섬</h1>
+          <p>{problem.story}</p>
+          <div className="hero-actions">
+            <button onClick={() => addGem()} className="primary-action">보물 1개 나누기</button>
+            <button onClick={check} className="ghost-action">정답 확인</button>
+          </div>
+        </div>
+        <div className="hero-character" aria-hidden="true">
+          <div className="character-glow" />
+          <img src="/assets/division-game/mascot-cutout.png" alt="" />
         </div>
       </section>
 
-      <section className="play-board">
-        <aside className="guide-card">
-          <img src="/assets/division-game/mascot.png" alt="나눗셈 탐험대 마스코트" />
-          <div>
-            <h2>{problem.total} ÷ {problem.groups} = ?</h2>
-            <p>{message}</p>
+      <section className="mission-grid">
+        <aside className="mission-card glass-card">
+          <div className="card-kicker">현재 미션</div>
+          <h2>{problem.total} ÷ {problem.groups} = ?</h2>
+          <p>{message}</p>
+          <div className="progress-block" aria-label="나누기 진행률">
+            <div className="progress-top"><span>배치한 {problem.item}</span><b>{placed}/{problem.total}</b></div>
+            <div className="progress-track"><i style={{ width: `${progress}%` }} /></div>
           </div>
-          {isEven && quizDone && <img className="reward" src="/assets/division-game/reward.png" alt="성공 보상 배지" />}
+          <div className="formula-chip">목표: 각 팀 {problem.answer}개씩</div>
         </aside>
 
-        <div className="activity-card">
-          <div className="gem-bank">
+        <section className="game-stage glass-card">
+          <div className="stage-header">
             <div>
-              <span className="label">남은 보석</span>
-              <strong>{remaining}</strong>
+              <span className="card-kicker">Treasure Bank</span>
+              <h2>남은 보물 {remaining}개</h2>
             </div>
-            <div className="gems" aria-label="남은 보석 표시">
-              {Array.from({ length: problem.total }).map((_, index) => (
-                <button
-                  key={index}
-                  className={`gem ${index < remaining ? '' : 'placed'}`}
-                  onClick={addGem}
-                  disabled={index >= remaining}
-                  aria-label="보석 하나 나누기"
-                >
-                  ◆
-                </button>
-              ))}
-            </div>
+            <button className="mini-button" onClick={() => removeGem()}>선택 팀 1개 되돌리기</button>
           </div>
 
-          <div className="team-grid">
-            {groups.map((count, index) => (
+          <div className="treasure-bank" aria-label="남은 보물">
+            {Array.from({ length: problem.total }).map((_, index) => (
               <button
                 key={index}
-                className={`team ${selectedGroup === index ? 'selected' : ''} ${count === problem.answer ? 'balanced' : ''}`}
-                onClick={() => setSelectedGroup(index)}
+                className={`treasure ${index < remaining ? '' : 'is-placed'}`}
+                onClick={() => addGem()}
+                disabled={index >= remaining}
+                aria-label={`${problem.item} 하나 나누기`}
               >
-                <span>{index + 1}팀</span>
-                <strong>{count}개</strong>
-                <div className="mini-gems">
-                  {Array.from({ length: count }).map((_, gemIndex) => <i key={gemIndex}>◆</i>)}
-                </div>
+                <span>◆</span>
               </button>
             ))}
           </div>
 
-          <div className="controls">
-            <button onClick={addGem}>선택한 팀에 1개 놓기</button>
-            <button className="secondary" onClick={() => removeGem(selectedGroup)}>1개 되돌리기</button>
-            <button className="check" onClick={check}>똑같이 나눴는지 확인</button>
+          <div className="teams-wrap">
+            {groups.map((count, index) => {
+              const balanced = count === problem.answer
+              const over = count > problem.answer
+              return (
+                <article key={index} className={`team-card ${selectedGroup === index ? 'selected' : ''} ${balanced ? 'balanced' : ''} ${over ? 'over' : ''}`}>
+                  <button className="team-main" onClick={() => setSelectedGroup(index)}>
+                    <span>{index + 1}팀</span>
+                    <strong>{count}<em>개</em></strong>
+                    <small>{balanced ? '균형 완료' : over ? '조금 많아요' : '선택해서 담기'}</small>
+                  </button>
+                  <div className="team-gems">
+                    {Array.from({ length: Math.max(count, problem.answer) }).map((_, gemIndex) => (
+                      <i key={gemIndex} className={gemIndex < count ? 'filled' : ''}>◆</i>
+                    ))}
+                  </div>
+                  <div className="team-controls">
+                    <button onClick={() => addGem(index)}>+1</button>
+                    <button onClick={() => removeGem(index)}>-1</button>
+                  </div>
+                </article>
+              )
+            })}
           </div>
-        </div>
+        </section>
 
-        <aside className="concept-card">
-          <h2>나눗셈 생각법</h2>
-          <p>나눗셈은 전체를 같은 묶음으로 나눌 때, 한 묶음에 몇 개씩 들어가는지 찾는 방법이에요.</p>
-          <div className="formula">{problem.total} ÷ {problem.groups} = <b>{isEven ? problem.answer : '?'}</b></div>
-
-          {isEven && (
-            <div className="quiz-card">
-              <h3>확인 퀴즈</h3>
-              <p>한 팀이 받은 보석은 몇 개일까요?</p>
+        <aside className="learning-panel glass-card">
+          <div className="card-kicker">Concept Check</div>
+          <h2>같은 묶음으로 나누기</h2>
+          <p>나눗셈은 전체를 같은 수의 묶음으로 나누고, 한 묶음에 몇 개가 들어가는지 찾는 방법이에요.</p>
+          <div className="equation-card">
+            <span>{problem.total}</span>
+            <em>÷</em>
+            <span>{problem.groups}</span>
+            <em>=</em>
+            <strong>{isEven ? problem.answer : '?'}</strong>
+          </div>
+          {checked && isEven && (
+            <div className="quiz-module">
+              <h3>한 팀이 받은 보물은 몇 개일까요?</h3>
               <div className="quiz-options">
                 {options.map((option) => (
-                  <button key={option} onClick={() => answerQuiz(option)}>{option}개</button>
+                  <button
+                    key={option}
+                    className={selectedAnswer === option ? (option === problem.answer ? 'correct' : 'wrong') : ''}
+                    onClick={() => answerQuiz(option)}
+                  >
+                    {option === problem.answer && quizDone ? '✓ ' : ''}{option}개
+                  </button>
                 ))}
               </div>
+              <p className="hint-text">{problem.hint}</p>
             </div>
           )}
-
-          <button className="next" onClick={nextProblem} disabled={!quizDone}>다음 미션</button>
+          {quizDone && (
+            <div className="reward-strip">
+              <img src="/assets/division-game/reward-cutout.png" alt="성공 보상" />
+              <span>보상 획득!</span>
+            </div>
+          )}
+          <button className="next-mission" onClick={nextProblem} disabled={!quizDone}>다음 미션으로 이동</button>
         </aside>
       </section>
     </main>
