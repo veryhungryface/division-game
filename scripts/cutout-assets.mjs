@@ -12,8 +12,8 @@ async function cutout(name, threshold = 62, feather = 38) {
   const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
   const { width, height, channels } = info;
   const samples = [];
-  const stepX = Math.max(1, Math.floor(width / 80));
-  const stepY = Math.max(1, Math.floor(height / 80));
+  const stepX = Math.max(1, Math.floor(width / 90));
+  const stepY = Math.max(1, Math.floor(height / 90));
   const push = (x, y) => {
     const i = (y * width + x) * channels;
     samples.push([data[i], data[i + 1], data[i + 2]]);
@@ -34,3 +34,5 @@ async function cutout(name, threshold = 62, feather = 38) {
 
 await cutout('mascot', 70, 48);
 await cutout('reward', 54, 34);
+await cutout('treasure', 64, 42);
+await cutout('chest', 64, 42);

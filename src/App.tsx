@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import type { DragEvent } from 'react'
 import './App.css'
 
 type Problem = {
@@ -33,12 +34,13 @@ function App() {
   const [problemIndex, setProblemIndex] = useState(0)
   const [groups, setGroups] = useState(() => makeEmptyGroups(problems[0].groups))
   const [selectedGroup, setSelectedGroup] = useState(0)
+  const [dropTarget, setDropTarget] = useState<number | null>(null)
   const [score, setScore] = useState(0)
   const [streak, setStreak] = useState(0)
   const [quizDone, setQuizDone] = useState(false)
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
   const [checked, setChecked] = useState(false)
-  const [message, setMessage] = useState('반짝이는 보물을 한 팀씩 공평하게 나눠 보세요.')
+  const [message, setMessage] = useState('보물을 끌어서 원하는 팀 상자에 넣어 보세요.')
 
   const problem = problems[problemIndex]
   const placed = groups.reduce((sum, value) => sum + value, 0)
@@ -52,42 +54,57 @@ function App() {
     setGroups((current) => current.map((value, groupIndex) => groupIndex === index ? Math.max(0, value + delta) : value))
   }
 
-  const addGem = (index = selectedGroup) => {
+  const addTreasure = (index = selectedGroup, viaDrop = false) => {
     if (remaining <= 0) {
-      setMessage('모든 보물이 놓였어요. 공평한지 확인해 볼까요?')
+      setMessage('모든 보물이 상자에 들어갔어요. 공평한지 확인해 볼까요?')
       return
     }
     updateGroup(index, 1)
     setSelectedGroup(index)
     setChecked(false)
+    setQuizDone(false)
+    setSelectedAnswer(null)
     const nextValue = groups[index] + 1
-    if (nextValue > problem.answer) setMessage('이 팀은 목표보다 많아요. 하나 되돌려 균형을 맞춰 보세요.')
-    else if (remaining === 1) setMessage('마지막 보물까지 놓았어요. 이제 확인해 보세요!')
-    else setMessage(`${index + 1}팀에 1개 전달! 모든 팀이 같은 수가 되게 이어가요.`)
+    if (nextValue > problem.answer) setMessage(`${index + 1}팀 상자가 목표보다 많아요. 하나 되돌려 균형을 맞춰 보세요.`)
+    else if (remaining === 1) setMessage('마지막 보물까지 들어갔어요. 이제 정답 확인을 눌러 보세요!')
+    else setMessage(viaDrop ? `${index + 1}팀 상자에 쏙! 계속 공평하게 나눠 보세요.` : `${index + 1}팀에 1개 전달! 드래그해서 넣어도 좋아요.`)
   }
 
-  const removeGem = (index = selectedGroup) => {
+  const removeTreasure = (index = selectedGroup) => {
     updateGroup(index, -1)
     setChecked(false)
-    setMessage('좋아요. 되돌리며 다시 균형을 맞출 수 있어요.')
+    setQuizDone(false)
+    setSelectedAnswer(null)
+    setMessage('좋아요. 상자에서 하나 꺼내며 다시 균형을 맞출 수 있어요.')
+  }
+
+  const handleDragStart = (event: DragEvent<HTMLButtonElement>) => {
+    event.dataTransfer.setData('text/plain', 'treasure')
+    event.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDrop = (event: DragEvent<HTMLElement>, index: number) => {
+    event.preventDefault()
+    setDropTarget(null)
+    addTreasure(index, true)
   }
 
   const check = () => {
     const wasChecked = checked
     setChecked(true)
     if (isEven) {
-      setMessage(`완벽해요! ${problem.total} ÷ ${problem.groups} = ${problem.answer}. 각 팀이 ${problem.answer}개씩 받았어요.`)
+      setMessage(`완벽해요! ${problem.total} ÷ ${problem.groups} = ${problem.answer}. 각 상자에 ${problem.answer}개씩 들어갔어요.`)
       if (!wasChecked) {
         setScore((value) => value + 120 + streak * 20)
         setStreak((value) => value + 1)
       }
     } else if (hasOverflow) {
-      setMessage('한 팀이 조금 많이 받았어요. 팀별 개수를 비교해 보세요.')
+      setMessage('한 상자가 조금 많이 받았어요. 상자별 개수를 비교해 보세요.')
       setStreak(0)
     } else if (remaining > 0) {
-      setMessage(`아직 ${remaining}개가 남았어요. 남은 보물도 공평하게 나눠 주세요.`)
+      setMessage(`아직 ${remaining}개가 남았어요. 남은 보물도 상자에 넣어 주세요.`)
     } else {
-      setMessage('모두 놓았지만 팀마다 개수가 달라요. 한 팀씩 개수를 맞춰 보세요.')
+      setMessage('모두 넣었지만 상자마다 개수가 달라요. 한 상자씩 개수를 맞춰 보세요.')
       setStreak(0)
     }
   }
@@ -99,7 +116,7 @@ function App() {
       setMessage('개념 확인까지 성공! 다음 섬으로 이동할 수 있어요.')
       setScore((value) => value + 80)
     } else {
-      setMessage('정답은 한 팀이 받은 보물 수예요. 팀 카드의 개수를 다시 확인해 보세요.')
+      setMessage('정답은 한 상자에 들어간 보물 수예요. 팀 상자의 개수를 다시 확인해 보세요.')
     }
   }
 
@@ -108,10 +125,11 @@ function App() {
     setProblemIndex(next)
     setGroups(makeEmptyGroups(problems[next].groups))
     setSelectedGroup(0)
+    setDropTarget(null)
     setQuizDone(false)
     setSelectedAnswer(null)
     setChecked(false)
-    setMessage('새로운 섬에 도착했어요. 이번에도 공평하게 나눠 봐요!')
+    setMessage('새로운 섬에 도착했어요. 이번에도 보물을 공평하게 나눠 봐요!')
   }
 
   return (
@@ -124,8 +142,8 @@ function App() {
         <div className="brand-lockup">
           <span className="brand-mark">÷</span>
           <div>
-            <strong>Division Island</strong>
-            <small>초등 나눗셈 미션</small>
+            <strong>나눗셈 보물섬</strong>
+            <small>{problem.story}</small>
           </div>
         </div>
         <div className="nav-stats">
@@ -135,41 +153,39 @@ function App() {
         </div>
       </nav>
 
-      <section className="hero-section">
-        <div className="hero-copy">
-          <span className="product-badge">Premium Math Quest</span>
-          <h1>나눗셈 보물섬</h1>
-          <p>{problem.story}</p>
-          <div className="hero-actions">
-            <button onClick={() => addGem()} className="primary-action">보물 1개 나누기</button>
-            <button onClick={check} className="ghost-action">정답 확인</button>
-          </div>
+      <section className="mission-brief glass-card">
+        <div>
+          <span className="product-badge">Drag & Divide</span>
+          <h1>{problem.total} ÷ {problem.groups} = ?</h1>
         </div>
-        <div className="hero-character" aria-hidden="true">
-          <div className="character-glow" />
-          <img src="/assets/division-game/mascot-cutout.png" alt="" />
+        <p>{message}</p>
+        <div className="brief-actions">
+          <button onClick={check} className="primary-action">정답 확인</button>
+          <button onClick={() => removeTreasure()} className="ghost-action">선택 상자 1개 꺼내기</button>
         </div>
       </section>
 
       <section className="mission-grid">
         <aside className="mission-card glass-card">
-          <div className="card-kicker">현재 미션</div>
-          <h2>{problem.total} ÷ {problem.groups} = ?</h2>
-          <p>{message}</p>
+          <div className="card-kicker">진행 상황</div>
           <div className="progress-block" aria-label="나누기 진행률">
-            <div className="progress-top"><span>배치한 {problem.item}</span><b>{placed}/{problem.total}</b></div>
+            <div className="progress-top"><span>상자에 넣은 보물</span><b>{placed}/{problem.total}</b></div>
             <div className="progress-track"><i style={{ width: `${progress}%` }} /></div>
           </div>
-          <div className="formula-chip">목표: 각 팀 {problem.answer}개씩</div>
+          <div className="formula-chip">목표: 각 상자 {problem.answer}개씩</div>
+          <div className="mascot-note">
+            <img src="/assets/division-game/mascot-cutout.png" alt="나눗셈 탐험가" />
+            <span>보물을 끌어 상자 위에 놓으면 들어가요.</span>
+          </div>
         </aside>
 
         <section className="game-stage glass-card">
           <div className="stage-header">
             <div>
-              <span className="card-kicker">Treasure Bank</span>
+              <span className="card-kicker">Treasure Dock</span>
               <h2>남은 보물 {remaining}개</h2>
             </div>
-            <button className="mini-button" onClick={() => removeGem()}>선택 팀 1개 되돌리기</button>
+            <span className="drag-guide">드래그 → 상자에 놓기</span>
           </div>
 
           <div className="treasure-bank" aria-label="남은 보물">
@@ -177,11 +193,14 @@ function App() {
               <button
                 key={index}
                 className={`treasure ${index < remaining ? '' : 'is-placed'}`}
-                onClick={() => addGem()}
+                onClick={() => addTreasure()}
+                draggable={index < remaining}
+                onDragStart={handleDragStart}
                 disabled={index >= remaining}
-                aria-label={`${problem.item} 하나 나누기`}
+                aria-label={`${problem.item} 하나를 끌어서 나누기`}
+                title="상자로 끌어 넣어 보세요"
               >
-                <span>◆</span>
+                <img src="/assets/division-game/treasure-cutout.png" alt="" />
               </button>
             ))}
           </div>
@@ -191,20 +210,30 @@ function App() {
               const balanced = count === problem.answer
               const over = count > problem.answer
               return (
-                <article key={index} className={`team-card ${selectedGroup === index ? 'selected' : ''} ${balanced ? 'balanced' : ''} ${over ? 'over' : ''}`}>
+                <article
+                  key={index}
+                  className={`team-card ${selectedGroup === index ? 'selected' : ''} ${dropTarget === index ? 'drop-ready' : ''} ${balanced ? 'balanced' : ''} ${over ? 'over' : ''}`}
+                  onDragOver={(event) => { event.preventDefault(); setDropTarget(index) }}
+                  onDragLeave={() => setDropTarget(null)}
+                  onDrop={(event) => handleDrop(event, index)}
+                >
                   <button className="team-main" onClick={() => setSelectedGroup(index)}>
-                    <span>{index + 1}팀</span>
+                    <span>{index + 1}팀 상자</span>
                     <strong>{count}<em>개</em></strong>
-                    <small>{balanced ? '균형 완료' : over ? '조금 많아요' : '선택해서 담기'}</small>
+                    <small>{balanced ? '균형 완료' : over ? '조금 많아요' : '여기에 넣기'}</small>
+                  </button>
+                  <button className="chest-drop" onClick={() => addTreasure(index)} aria-label={`${index + 1}팀 상자에 보물 넣기`}>
+                    <img src="/assets/division-game/chest-cutout.png" alt="" />
+                    <span>드롭존</span>
                   </button>
                   <div className="team-gems">
                     {Array.from({ length: Math.max(count, problem.answer) }).map((_, gemIndex) => (
-                      <i key={gemIndex} className={gemIndex < count ? 'filled' : ''}>◆</i>
+                      <img key={gemIndex} className={gemIndex < count ? 'filled' : ''} src="/assets/division-game/treasure-cutout.png" alt="" />
                     ))}
                   </div>
                   <div className="team-controls">
-                    <button onClick={() => addGem(index)}>+1</button>
-                    <button onClick={() => removeGem(index)}>-1</button>
+                    <button onClick={() => addTreasure(index)}>+1</button>
+                    <button onClick={() => removeTreasure(index)}>-1</button>
                   </div>
                 </article>
               )
@@ -225,7 +254,7 @@ function App() {
           </div>
           {checked && isEven && (
             <div className="quiz-module">
-              <h3>한 팀이 받은 보물은 몇 개일까요?</h3>
+              <h3>한 상자에 들어간 보물은 몇 개일까요?</h3>
               <div className="quiz-options">
                 {options.map((option) => (
                   <button
